@@ -112,3 +112,161 @@ ECONNREFUSED on API calls	API server isn't running — check Terminal 1
 relation "documents" does not exist	Schema wasn't pushed — repeat Step 5
 Port already in use	Change PORT=8080 or PORT=19350 to any free port (update both terminals to match)
 Error: Use pnpm instead	You ran npm install — use pnpm install instead
+
+
+
+
+## Prod support
+
+Build a Production/UAT Issue Diagnosis Tool — a full-stack web app for SRE/ops engineers 
+to diagnose infrastructure incidents using an AI assistant.
+## Stack
+- React + Vite frontend (TypeScript)
+- Express backend (TypeScript)
+- PostgreSQL with Drizzle ORM
+- OpenAI GPT-4 for AI chat (streaming via SSE)
+- React Query for data fetching
+- Tailwind CSS + shadcn/ui components
+- Wouter for client-side routing
+## Visual Design
+Dark ops/terminal theme:
+- Background: #0a0a0f (near black)
+- Primary accent: cyan (#06b6d4)
+- Card backgrounds: #0f0f1a
+- Borders: rgba(255,255,255,0.08)
+- Monospace font for diagnostic output (JetBrains Mono or similar)
+- Subtle cyan glow effects on active/focused elements
+- Font: display font for headings (e.g. Syne or Inter), mono for terminal-like text
+## Pages & Routes
+1. `/` — Dashboard: stats (open/investigating/resolved session counts), quick-start 
+   template cards (one per issue category), recent sessions list
+2. `/new` — New Diagnosis: form with incident title input, environment selector 
+   (Production/UAT/Development as clickable cards), category selector (Autosys/Polypaths/
+   Microservice/Database/Network/Other as pill buttons), and a Diagnostic Skill selector 
+   (see Skills system below)
+3. `/sessions` — Session List: table/list of all sessions with status badge, env badge, 
+   category, created date, and link to session
+4. `/session/:id` — Session Detail: two-panel layout:
+   - Left panel (280px): session metadata (id, title, env badge, category, created date), 
+     status dropdown (open/investigating/resolved), active skill display with expandable 
+     runbook viewer, assign/change skill picker
+   - Right panel: AI chat interface with message history, streaming message input, 
+     auto-scroll to latest message
+5. `/skills` — Skills Management: grid of skill cards (name, category badge, systems tags, 
+   description, "View Runbook" expandable), "New Skill" button opens create form, 
+   edit/delete per card
+## Database Schema (PostgreSQL + Drizzle)
+Table: `skills`
+- id (serial PK)
+- name (text, not null)
+- description (text)
+- category (text) — "Autosys" | "Polypaths" | "Microservice" | "Database" | "Other"
+- systems (text[]) — array of system names
+- runbook (text) — full markdown runbook
+- isDefault (boolean, default false)
+- createdAt, updatedAt (timestamps)
+Table: `conversations`
+- id (serial PK)
+- createdAt, updatedAt
+Table: `messages`
+- id (serial PK)
+- conversationId (FK → conversations)
+- role ("user" | "assistant" | "system")
+- content (text)
+- createdAt
+Table: `diagnostic_sessions`
+- id (serial PK)
+- title (text, not null)
+- environment ("production" | "uat" | "development")
+- status ("open" | "investigating" | "resolved")
+- category (text)
+- skillId (FK → skills, nullable)
+- conversationId (FK → conversations, nullable)
+- createdAt, updatedAt
+## REST API Endpoints
+- GET/POST /api/skills
+- GET/PUT/DELETE /api/skills/:id
+- GET/POST /api/sessions
+- GET/PATCH/DELETE /api/sessions/:id
+- GET/POST /api/openai/conversations
+- GET/DELETE /api/openai/conversations/:id
+- GET /api/openai/conversations/:id/messages
+- POST /api/openai/conversations/:id/messages  ← streams SSE response
+- GET /api/healthz
+## AI / Skills System
+When a session has a skillId, fetch that skill and inject its runbook into the AI system 
+prompt dynamically before every conversation. The system prompt should tell the AI it is 
+an expert infrastructure engineer, and then include the runbook steps verbatim.
+Base system prompt (always included):
+"You are an expert infrastructure and operations engineer specializing in diagnosing 
+production and UAT issues across Polypaths (fixed income analytics), Autosys (job 
+scheduler), microservices, databases, and data pipelines. Guide the engineer through 
+diagnosis methodically. Ask clarifying questions. Provide specific commands to run. 
+Reference exact log locations, config files, and common failure patterns."
+If a skill is attached, append:
+"## Active Runbook: [skill name]
+[full runbook markdown]
+Follow this runbook's steps to guide the diagnosis."
+Stream the AI response back as Server-Sent Events (SSE) with `data: {"chunk": "..."}` 
+format. Save completed messages to the messages table.
+## Seed 5 Default Skills
+1. **Autosys Job Failure** (category: Autosys)
+   Systems: Autosys Event Server, Autosys Scheduler, Job logs, Application server
+   Runbook: Steps to check job status (autorep -j), identify ON_ICE/zombie jobs, 
+   check job logs, verify dependencies, restart/force-start jobs, escalation paths.
+2. **Polypaths Calculation Error** (category: Polypaths)
+   Systems: Polypaths app server, Market data feed, Database, Upstream data sources
+   Runbook: Steps to check calculation logs, verify market data currency, check DB 
+   connectivity, validate curve/instrument config, test calculation manually, resolutions 
+   for missing data/stale prices/curve failures.
+3. **Microservice 5xx / Outage** (category: Microservice)
+   Systems: API Gateway, Load balancer, Service instances, Health check endpoints, 
+   Application logs, APM/Monitoring
+   Runbook: Check health endpoints, check logs for errors, check JVM heap/disk/memory, 
+   check DB connection pool, check upstream dependencies, check recent deployments. 
+   Resolutions for OOM/connection pool exhaustion/bad deployment/502-504 errors.
+4. **Database Blocking / Deadlock** (category: Database)
+   Systems: Database server, Application logs, DBA tools, Monitoring
+   Runbook: SQL queries for SQL Server/Oracle/PostgreSQL to find blocking sessions and 
+   long-running queries, how to kill blocking sessions, check connection pool, 
+   resolutions for deadlocks/long queries/disk full.
+5. **Data Pipeline Failure** (category: Other)
+   Systems: Message queue (Kafka/MQ/RabbitMQ), ETL scheduler, Source systems, 
+   Target database, Pipeline logs
+   Runbook: Check pipeline status in scheduler, check Kafka consumer lag, verify source 
+   system connectivity, check target DB, identify data quality issues (nulls/schema 
+   mismatch/duplicates). Resolutions for consumer lag/poison messages/backfill.
+## Status & Environment Badges
+- open → amber badge
+- investigating → blue badge
+- resolved → green badge
+- production → red badge
+- uat → orange badge
+- development → gray badge
+## New Session Form — Skill Selector Behavior
+Show all skills as selectable cards below the category selector. Clicking a card selects 
+it (highlighted cyan border). A "None" option appears first. Filter displayed skills to 
+match the chosen category when possible. Support ?skill=<id> URL param to preselect. 
+Pass skillId in the POST /api/sessions payload.
+## Session Detail — Skill Panel
+In the left metadata panel, show:
+- If skill assigned: skill name with BookOpen icon, systems as small monospace tags, 
+  "View Runbook" toggle to expand full markdown-rendered runbook, "Change Skill" button 
+  that opens a popover/dropdown to pick a different skill (calls PATCH /api/sessions/:id)
+- If no skill: "No Skill Selected" with "Assign Skill" button
+## Skills Page — Card Features
+- Search/filter bar at top
+- Category badge colors: Autosys=cyan, Polypaths=purple, Microservice=green, 
+  Database=amber, Other=gray
+- Systems shown as small monospace chip tags
+- "View Runbook" expands inline below the card, renders markdown with react-markdown
+- "New Skill" → inline create form or modal: name, description, category select, 
+  systems (comma-separated input, rendered as tags), runbook (large monospace textarea)
+- Edit button per card
+- Delete button (with confirmation dialog) — disabled for isDefault skills
+- isDefault skills show a lock icon or "Built-in" badge
+## Component Architecture
+- `Layout.tsx` — sidebar nav with links: Dashboard, All Sessions, Skills, New Diagnosis
+- `ChatInterface.tsx` — handles SSE streaming, auto-scroll, message list rendering
+- `Badges.tsx` — StatusBadge and EnvBadge reusable components
+- Pages: dashboard.tsx, new-session.tsx, session-detail.tsx, session-list.tsx, skills.tsx
