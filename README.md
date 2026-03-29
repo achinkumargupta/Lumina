@@ -270,3 +270,49 @@ In the left metadata panel, show:
 - `ChatInterface.tsx` — handles SSE streaming, auto-scroll, message list rendering
 - `Badges.tsx` — StatusBadge and EnvBadge reusable components
 - Pages: dashboard.tsx, new-session.tsx, session-detail.tsx, session-list.tsx, skills.tsx
+
+
+
+
+
+
+Tier 1 — Changes the game
+1. Live Tool Execution (the big one)
+Right now the AI tells you what commands to run — you go run them manually, copy-paste the output back. The real value is the AI runs the tools itself against your microservices. Add the semantic tool retrieval layer we discussed, connect it to your 1000 endpoints, and the AI can investigate autonomously. This turns it from a chat assistant into an actual autonomous agent.
+
+2. Real-time Collaboration
+Two engineers can't work the same session simultaneously. Add WebSocket-based live sync so multiple people see each other's messages and the AI responses in real time — essential for high-severity P1 incidents where multiple people are involved.
+
+3. Alerting Integration (PagerDuty / OpsGenie)
+Instead of engineers manually creating sessions when something breaks, the app auto-creates a session the moment an alert fires — pre-filled with the alert name, affected service, environment, and the matching skill already selected. Zero friction from alert to diagnosis.
+
+Tier 2 — High value, moderate effort
+4. AI-Generated RCA / Post-Incident Report
+At the end of a resolved session, a button generates a structured Root Cause Analysis document from the chat history — what happened, timeline, root cause, resolution steps, prevention recommendations. Exportable as PDF or Markdown. Saves 30–60 minutes of post-incident write-up.
+
+5. Similar Incidents Suggestion
+When you start a new session, use vector similarity to search past resolved sessions and surface "3 similar incidents from the last 90 days" with links. Engineers don't reinvent the wheel for recurring issues.
+
+6. Session Timeline View
+Alongside the chat, show a structured visual timeline: 09:12 — Session opened → 09:15 — AI identified DB blocking query → 09:23 — Resolution applied → 09:31 — Resolved. Much easier for post-incident review than reading a raw chat log.
+
+7. Runbook Auto-Improvement
+Track which steps in a runbook actually led to resolution (via a "this fixed it" button mid-chat). Over time, surface which steps are most effective and flag runbook sections that are never useful.
+
+Tier 3 — Polish and completeness
+8. Authentication & Multi-user
+Currently anyone with the URL can access everything. Add login so sessions belong to engineers, you get "sessions I worked on" filtering, and an audit trail of who did what.
+
+9. Metrics Dashboard
+Mean Time To Resolve (MTTR) by category and environment, most frequent failure types, busiest incident times, which skills are used most. Useful for ops managers and SRE leads.
+
+10. Command Block UX
+When the AI suggests a command, render it in a terminal-style block with a one-click copy button and a structured "paste output here" reply box — rather than the engineer copy-pasting into a plain text message.
+
+11. Session Linking
+Link related sessions — e.g., an Autosys failure that was caused by a database deadlock. Shows a "Related Incidents" section in the left panel connecting the two.
+
+What I'd build first
+If I were prioritizing: live tool execution first (it's the core differentiator), then alerting integration (removes the manual session creation step), then RCA generation (saves real post-incident time). Those three together make this a serious production ops platform rather than a smart chat interface.
+
+Want me to start on any of these?
